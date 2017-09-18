@@ -218,7 +218,7 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 		h.logger().Printf("cluster status error: %s", err)
 		return
 	}
-	if err := json.NewEncoder(w).Encode(getStatusResponse{
+	if err := json.NewEncoder(w).Encode(GetStatusResponse{
 		Status: status,
 	}); err != nil {
 		h.logger().Printf("write status response error: %s", err)
@@ -229,7 +229,7 @@ type getSchemaResponse struct {
 	Indexes []*IndexInfo `json:"indexes"`
 }
 
-type getStatusResponse struct {
+type GetStatusResponse struct {
 	Status proto.Message `json:"status"`
 }
 

@@ -31,9 +31,10 @@ import (
 // IQCommand represents a command for performing internal queries against pilosa
 // for debugging.
 type IQCommand struct {
-	Host  string
-	Index string
-	Query string
+	Host      string
+	Index     string
+	Query     string
+	NumSlices int
 
 	*pilosa.CmdIO
 }
@@ -92,6 +93,10 @@ func (cmd *IQCommand) Run(ctx context.Context) error {
 	query, err := pql.ParseString(cmd.Query)
 	if err != nil {
 		return errors.Wrap(err, "parsing query")
+	}
+
+	if cmd.NumSlices != 0 {
+		slices = slices[:cmd.NumSlices]
 	}
 
 	res, err := e.Exec(ctx, node, cmd.Index, query, slices, nil)

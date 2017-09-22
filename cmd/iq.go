@@ -46,6 +46,7 @@ func NewIQCommand(stdin io.Reader, stdout, stderr io.Writer) *cobra.Command {
 	flags.StringVarP(&Iq.Host, "pilosa-host", "p", "localhost:10101", "Pilosa host to query")
 	flags.StringVarP(&Iq.Index, "index", "i", "idx", "Pilosa index to query")
 	flags.StringVarP(&Iq.Query, "query", "q", "Bitmap(frame=fram, rowID=1)", "Query to execute.")
+	flags.IntVarP(&Iq.NumSlices, "num-slices", "n", 0, "Number of slices to send - 0 sends all available.")
 
 	return iqCmd
 }

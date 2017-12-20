@@ -164,6 +164,12 @@
   version = "v1.0.1"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/pilosa/fast-skiplist"
+  packages = ["."]
+  revision = "bf56e399079d141a2ff8f6a4dce7d3d5b0cecd1c"
+
+[[projects]]
   name = "github.com/rakyll/statik"
   packages = ["fs"]
   revision = "fd36b3595eb2ec8da4b8153b107f7ea08504899d"
@@ -262,6 +268,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ac5bf8adcbd75986cd1b3252a745167a5447602c575eaabd0e69f2ed6b0c57d2"
+  inputs-digest = "0d29021826f279df97cb8d256fdd248308dfcd5151a39b4af0e03aecdd840b7f"
   solver-name = "gps-cdcl"
   solver-version = 1

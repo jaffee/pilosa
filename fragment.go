@@ -1389,52 +1389,6 @@ func track(start time.Time, message string, stats StatsClient, logger *log.Logge
 	stats.Histogram("snapshot", elapsed.Seconds(), 1.0)
 }
 
-func (f *Fragment) snapshot() error {
-	logger := f.logger()
-	logger.Printf("fragment: snapshotting %s/%s/%s/%d", f.index, f.frame, f.view, f.slice)
-	completeMessage := fmt.Sprintf("fragment: snapshot complete %s/%s/%s/%d", f.index, f.frame, f.view, f.slice)
-	start := time.Now()
-	defer track(start, completeMessage, f.stats, logger)
-
-	// Create a temporary file to snapshot to.
-	snapshotPath := f.path + SnapshotExt
-	file, err := os.Create(snapshotPath)
-	if err != nil {
-		return fmt.Errorf("create snapshot file: %s", err)
-	}
-	defer file.Close()
-
-	// Write storage to snapshot.
-	bw := bufio.NewWriter(file)
-	if _, err := f.storage.WriteTo(bw); err != nil {
-		return fmt.Errorf("snapshot write to: %s", err)
-	}
-
-	if err := bw.Flush(); err != nil {
-		return fmt.Errorf("flush: %s", err)
-	}
-
-	// Close current storage.
-	if err := f.closeStorage(); err != nil {
-		return fmt.Errorf("close storage: %s", err)
-	}
-
-	// Move snapshot to data file location.
-	if err := os.Rename(snapshotPath, f.path); err != nil {
-		return fmt.Errorf("rename snapshot: %s", err)
-	}
-
-	// Reopen storage.
-	if err := f.openStorage(); err != nil {
-		return fmt.Errorf("open storage: %s", err)
-	}
-
-	// Reset operation count.
-	f.opN = 0
-
-	return nil
-}
-
 // RecalculateCache rebuilds the cache regardless of invalidate time delay.
 func (f *Fragment) RecalculateCache() {
 	f.mu.Lock()
@@ -1902,4 +1856,117 @@ func byteSlicesEqual(a [][]byte) bool {
 // Pos returns the row position of a row/column pair.
 func Pos(rowID, columnID uint64) uint64 {
 	return (rowID * SliceWidth) + (columnID % SliceWidth)
+}
+
+func (f *Fragment) snapshot() error {
+	return snapshot(f, f.storage)
+}
+
+func snapshot(f *Fragment, bm *roaring.Bitmap) error {
+
+	logger := f.logger()
+	logger.Printf("fragment: snapshotting %s/%s/%s/%d", f.index, f.frame, f.view, f.slice)
+	completeMessage := fmt.Sprintf("fragment: snapshot complete %s/%s/%s/%d", f.index, f.frame, f.view, f.slice)
+	start := time.Now()
+	defer track(start, completeMessage, f.stats, logger)
+
+	// Create a temporary file to snapshot to.
+	snapshotPath := f.path + SnapshotExt
+	file, err := os.Create(snapshotPath)
+	if err != nil {
+		return fmt.Errorf("create snapshot file: %s", err)
+	}
+	defer file.Close()
+
+	// Write storage to snapshot.
+	bw := bufio.NewWriter(file)
+	if _, err := bm.WriteTo(bw); err != nil {
+		return fmt.Errorf("snapshot write to: %s", err)
+	}
+
+	if err := bw.Flush(); err != nil {
+		return fmt.Errorf("flush: %s", err)
+	}
+
+	// Close current storage.
+	if err := f.closeStorage(); err != nil {
+		return fmt.Errorf("close storage: %s", err)
+	}
+
+	// Move snapshot to data file location.
+	if err := os.Rename(snapshotPath, f.path); err != nil {
+		return fmt.Errorf("rename snapshot: %s", err)
+	}
+
+	// Reopen storage.
+	if err := f.openStorage(); err != nil {
+		return fmt.Errorf("open storage: %s", err)
+	}
+
+	// Reset operation count.
+	f.opN = 0
+
+	return nil
+}
+
+func (f *Fragment) FastImport(rowIDs, columnIDs []uint64) error {
+	// Verify that there are an equal number of row ids and column ids.
+	if len(rowIDs) != len(columnIDs) {
+		return fmt.Errorf("mismatch of row/column len: %d != %d", len(rowIDs), len(columnIDs))
+	}
+
+	// Disconnect op writer so we don't append updates.
+	localBitmap := roaring.NewBitmap()
+	localBitmap.OpWriter = nil
+	// Process every bit.
+	// If an error occurs then reopen the storage.
+	lastID := uint64(0)
+	set := make(map[uint64]struct{})
+	for i := range rowIDs {
+		rowID, columnID := rowIDs[i], columnIDs[i]
+
+		// Determine the position of the bit in the storage.
+		pos, err := f.pos(rowID, columnID)
+		if err != nil {
+			return err
+		}
+
+		// Write to storage.
+		_, err = localBitmap.Add(pos)
+		if err != nil {
+			return err
+		}
+		// Reduce the StatsD rate for high volume stats
+		f.stats.Count("ImportBit", 1, 0.0001)
+		// import optimization to avoid linear foreach calls
+		// slight risk of concurrent cache counter being off but
+		// no real danger
+		if i == 0 || rowID != lastID {
+			lastID = rowID
+			set[rowID] = struct{}{}
+		}
+
+		// Invalidate block checksum.
+		delete(f.checksums, int(rowID/HashBlockSize))
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	// Update cache counts for all rows.
+	var results *roaring.Bitmap
+	if f.storage.Count() > 0 {
+		results = f.storage.Union(localBitmap)
+	} else {
+		results = localBitmap
+	}
+
+	for rowID := range set {
+		n := results.CountRange(rowID*SliceWidth, (rowID+1)*SliceWidth)
+		f.cache.BulkAdd(rowID, n)
+	}
+
+	f.cache.Invalidate()
+	return snapshot(f, results)
+
 }

@@ -873,7 +873,7 @@ func (f *Frame) Import(rowIDs, columnIDs []uint64, timestamps []*time.Time) erro
 			return err
 		}
 
-		if err := frag.Import(data.RowIDs, data.ColumnIDs); err != nil {
+		if err := frag.FastImport(data.RowIDs, data.ColumnIDs); err != nil {
 			return err
 		}
 	}

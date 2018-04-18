@@ -79,9 +79,9 @@ var (
 	ErrResizeNotRunning   = errors.New("no resize job currently running")
 )
 
-// ApiMethodNotAllowedError wraps an error value indicating that a particular
+// APIMethodNotAllowedError wraps an error value indicating that a particular
 // API method is not allowed in the current cluster state.
-type ApiMethodNotAllowedError struct {
+type APIMethodNotAllowedError struct {
 	error
 }
 

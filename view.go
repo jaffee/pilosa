@@ -120,6 +120,8 @@ func (v *View) Open() error {
 		return err
 	}
 
+	v.maxSlice = v.calculateMaxSlice()
+
 	return nil
 }
 
@@ -176,8 +178,7 @@ func (v *View) Close() error {
 	return nil
 }
 
-// MaxSlice returns the max slice in the view.
-func (v *View) MaxSlice() uint64 {
+func (v *View) calculateMaxSlice() uint64 {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
@@ -189,6 +190,14 @@ func (v *View) MaxSlice() uint64 {
 	}
 
 	return max
+}
+
+// MaxSlice returns the max slice in the view.
+func (v *View) MaxSlice() uint64 {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	return v.maxSlice
 }
 
 // FragmentPath returns the path to a fragment in the view.

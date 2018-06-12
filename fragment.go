@@ -1756,8 +1756,7 @@ func (s *FragmentSyncer) syncFragment() error {
 		}
 
 		// Retrieve remote blocks.
-		client := NewInternalHTTPClientFromURI(&node.URI, s.RemoteClient)
-		blocks, err := client.FragmentBlocks(context.Background(), s.Fragment.index, s.Fragment.field, s.Fragment.slice)
+		blocks, err := s.Cluster.InternalClient.FragmentBlocks(context.Background(), nil, s.Fragment.index, s.Fragment.field, s.Fragment.slice)
 		if err != nil && err != ErrFragmentNotFound {
 			return errors.Wrap(err, "getting blocks")
 		}
@@ -1821,7 +1820,7 @@ func (s *FragmentSyncer) syncBlock(id int) error {
 
 	// Read pairs from each remote block.
 	var pairSets []pairSet
-	var clients []InternalClient
+	var uris []*URI
 	for _, node := range s.Cluster.SliceNodes(f.index, f.slice) {
 		if s.Node.ID == node.ID {
 			continue
@@ -1832,11 +1831,11 @@ func (s *FragmentSyncer) syncBlock(id int) error {
 			return nil
 		}
 
-		client := NewInternalHTTPClientFromURI(&node.URI, s.RemoteClient)
-		clients = append(clients, client)
+		uri := &node.URI
+		uris = append(uris, uri)
 
 		// Only sync the standard block.
-		rowIDs, columnIDs, err := client.BlockData(context.Background(), f.index, f.field, f.slice, id)
+		rowIDs, columnIDs, err := s.Cluster.InternalClient.BlockData(context.Background(), &node.URI, f.index, f.field, f.slice, id)
 		if err != nil {
 			return errors.Wrap(err, "getting block")
 		}
@@ -1859,7 +1858,7 @@ func (s *FragmentSyncer) syncBlock(id int) error {
 	}
 
 	// Write updates to remote blocks.
-	for i := 0; i < len(clients); i++ {
+	for i := 0; i < len(uris); i++ {
 		set, clear := sets[i], clears[i]
 		count := 0
 
@@ -1898,7 +1897,7 @@ func (s *FragmentSyncer) syncBlock(id int) error {
 				Query:  buffers[k].String(),
 				Remote: true,
 			}
-			_, err := clients[i].Query(context.Background(), f.index, queryRequest)
+			_, err := s.Cluster.InternalClient.QueryNode(context.Background(), uris[i], f.index, queryRequest)
 			if err != nil {
 				return errors.Wrap(err, "executing")
 			}
@@ -1938,5 +1937,10 @@ func byteSlicesEqual(a [][]byte) bool {
 
 // pos returns the row position of a row/column pair.
 func pos(rowID, columnID uint64) uint64 {
+	return (rowID * SliceWidth) + (columnID % SliceWidth)
+}
+
+// pos returns the row position of a row/column pair.
+func Pos(rowID, columnID uint64) uint64 {
 	return (rowID * SliceWidth) + (columnID % SliceWidth)
 }

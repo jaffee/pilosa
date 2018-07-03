@@ -65,6 +65,14 @@ type Node struct {
 	IsCoordinator bool   `json:"isCoordinator"`
 }
 
+type ResizeSource struct {
+	Node  *Node
+	Index string
+	Field string
+	View  string
+	Shard uint64
+}
+
 func (n Node) String() string {
 	return fmt.Sprintf("Node: %s", n.ID)
 }
@@ -485,7 +493,7 @@ func (c *cluster) setNodeState(state string) error {
 // receiveNodeState sets node state in Topology in order for the
 // Coordinator to keep track of, during startup, which nodes have
 // finished opening their Holder.
-func (c *cluster) receiveNodeState(nodeID string, state string) error {
+func (c *cluster) receiveNodeState(nodeID, state string) error {
 	if !c.isCoordinator() {
 		return nil
 	}
@@ -1176,7 +1184,16 @@ func (c *cluster) completeCurrentJob(state string) error {
 }
 
 // followResizeInstruction is run by any node that receives a ResizeInstruction.
-func (c *cluster) followResizeInstruction(instr *internal.ResizeInstruction) error {
+func (c *cluster) followResizeInstruction(
+	clusterId, state string,
+	nodes []*Node,
+	jobId int64,
+	node *Node,
+	schema *Schema,
+	sources []ResizeSource,
+	coordinator *Node) error {
+	c.logger.Printf("follow resize instruction on %s", c.Node.ID)
+
 	c.logger.Printf("follow resize instruction on %s", c.Node.ID)
 	// Make sure the cluster status on this node agrees with the Coordinator
 	// before attempting a resize.
@@ -1272,14 +1289,14 @@ func (c *cluster) followResizeInstruction(instr *internal.ResizeInstruction) err
 	return nil
 }
 
-func (c *cluster) markResizeInstructionComplete(complete *internal.ResizeInstructionComplete) error {
+func (c *cluster) markResizeInstructionComplete(jobID uint64, completeErr error, node *Node) error {
 
-	j := c.job(complete.JobID)
+	j := c.job(jobID)
 
 	// Abort the job if an error exists in the complete object.
 	if complete.Error != "" {
 		j.result <- resizeJobStateAborted
-		return errors.New(complete.Error)
+		return errors.New(completeError)
 	}
 
 	j.mu.Lock()
@@ -1290,7 +1307,7 @@ func (c *cluster) markResizeInstructionComplete(complete *internal.ResizeInstruc
 	}
 
 	// Mark host complete.
-	j.IDs[complete.Node.ID] = true
+	j.IDs[node.ID] = true
 
 	if !j.nodesArePending() {
 		j.result <- resizeJobStateDone
@@ -1752,7 +1769,7 @@ func (c *cluster) nodeLeave(node *Node) error {
 	return nil
 }
 
-func (c *cluster) mergeClusterStatus(cs *internal.ClusterStatus) error {
+func (c *cluster) mergeClusterStatus(clusterID, nodestate string, officialNodes []*Node) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Printf("merge cluster status: %v", cs)
@@ -1762,9 +1779,7 @@ func (c *cluster) mergeClusterStatus(cs *internal.ClusterStatus) error {
 	}
 
 	// Set ClusterID.
-	c.setID(cs.ClusterID)
-
-	officialNodes := DecodeNodes(cs.Nodes)
+	c.setID(clusterID)
 
 	// Add all nodes from the coordinator.
 	for _, node := range officialNodes {
@@ -1794,7 +1809,7 @@ func (c *cluster) mergeClusterStatus(cs *internal.ClusterStatus) error {
 		}
 	}
 
-	c.setState(cs.State)
+	c.setState(nodeState)
 
 	c.markAsJoined()
 

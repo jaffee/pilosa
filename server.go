@@ -430,93 +430,6 @@ func (s *Server) monitorAntiEntropy() {
 	}
 }
 
-// receiveMessage represents an implementation of BroadcastHandler.
-func (s *Server) receiveMessage(pb proto.Message) error {
-	switch obj := pb.(type) {
-	case *internal.CreateShardMessage:
-		idx := s.holder.Index(obj.Index)
-		if idx == nil {
-			return fmt.Errorf("Local Index not found: %s", obj.Index)
-		}
-		idx.setRemoteMaxShard(obj.Shard)
-	case *internal.CreateIndexMessage:
-		opt := IndexOptions{}
-		_, err := s.holder.CreateIndex(obj.Index, opt)
-		if err != nil {
-			return err
-		}
-	case *internal.DeleteIndexMessage:
-		if err := s.holder.DeleteIndex(obj.Index); err != nil {
-			return err
-		}
-	case *internal.CreateFieldMessage:
-		idx := s.holder.Index(obj.Index)
-		if idx == nil {
-			return fmt.Errorf("Local Index not found: %s", obj.Index)
-		}
-		opt := decodeFieldOptions(obj.Meta)
-		_, err := idx.CreateField(obj.Field, *opt)
-		if err != nil {
-			return err
-		}
-	case *internal.DeleteFieldMessage:
-		idx := s.holder.Index(obj.Index)
-		if err := idx.DeleteField(obj.Field); err != nil {
-			return err
-		}
-	case *internal.CreateViewMessage:
-		f := s.holder.Field(obj.Index, obj.Field)
-		if f == nil {
-			return fmt.Errorf("Local Field not found: %s", obj.Field)
-		}
-		_, _, err := f.createViewIfNotExistsBase(obj.View)
-		if err != nil {
-			return err
-		}
-	case *internal.DeleteViewMessage:
-		f := s.holder.Field(obj.Index, obj.Field)
-		if f == nil {
-			return fmt.Errorf("Local Field not found: %s", obj.Field)
-		}
-		err := f.deleteView(obj.View)
-		if err != nil {
-			return err
-		}
-	case *internal.ClusterStatus:
-		err := s.cluster.mergeClusterStatus(obj)
-		if err != nil {
-			return err
-		}
-	case *internal.ResizeInstruction:
-		err := s.cluster.followResizeInstruction(obj)
-		if err != nil {
-			return err
-		}
-	case *internal.ResizeInstructionComplete:
-		err := s.cluster.markResizeInstructionComplete(obj)
-		if err != nil {
-			return err
-		}
-	case *internal.SetCoordinatorMessage:
-		s.cluster.setCoordinator(DecodeNode(obj.New))
-	case *internal.UpdateCoordinatorMessage:
-		s.cluster.updateCoordinator(DecodeNode(obj.New))
-	case *internal.NodeStateMessage:
-		err := s.cluster.receiveNodeState(obj.NodeID, obj.State)
-		if err != nil {
-			return err
-		}
-	case *internal.RecalculateCaches:
-		s.holder.RecalculateCaches()
-	case *internal.NodeEventMessage:
-		s.cluster.ReceiveEvent(DecodeNodeEvent(obj))
-	case *internal.NodeStatus:
-		s.handleRemoteStatus(pb)
-	}
-
-	return nil
-}
-
 // SendSync represents an implementation of Broadcaster.
 func (s *Server) SendSync(pb proto.Message) error {
 	var eg errgroup.Group
@@ -727,4 +640,70 @@ func expandDirName(path string) (string, error) {
 		return filepath.Join(HomeDir, strings.TrimPrefix(path, prefix)), nil
 	}
 	return path, nil
+}
+
+func (s *Server) messageTypeCreateShard(index string, shard uint64) error {
+	idx := s.holder.Index(index)
+	if idx == nil {
+		return fmt.Errorf("Local Index not found: %s", index)
+	}
+	idx.SetRemoteMaxShard(shard)
+	return
+}
+
+func (s *Server) messageTypeCreateIndex(index string) error {
+	_, err := s.holder.CreateIndex(index, IndexOptions{})
+	if err != nil {
+		return err
+	}
+}
+func (s *Server) messageTypeDeleteIndex(index string) error {
+	if err := s.holder.DeleteIndex(index); err != nil {
+		return err
+	}
+	return
+}
+func (s *Server) messageTypeCreateFieldMessage(index, field string, opt FieldOptions) error {
+	idx := s.holder.Index(index)
+	if idx == nil {
+		return fmt.Errorf("Local Index not found: %s", index)
+	}
+	_, err := idx.CreateField(field, opt)
+	if err != nil {
+		return err
+	}
+	return
+}
+func (s *Server) messageTypeDeleteFieldMessage(index, field string) error {
+	idx := s.holder.Index(index)
+	if err := idx.DeleteField(field); err != nil {
+		return err
+	}
+	return
+}
+func (s *Server) messageTypeCreateViewMessage(index, field, view string) error {
+	f := s.holder.Field(index, field)
+	if f == nil {
+		return fmt.Errorf("Local Field not found: %s", field)
+	}
+	_, _, err := f.createViewIfNotExistsBase(view)
+	if err != nil {
+		return err
+	}
+	return
+}
+func (s *Server) messageTypeDeleteViewMessage(index, field, view string) error {
+	f := s.holder.Field(index, field)
+	if f == nil {
+		return fmt.Errorf("Local Field not found: %s", field)
+	}
+	err := f.deleteView(view)
+	if err != nil {
+		return err
+	}
+	return
+}
+
+func (s *Server) messageTypeRecalculateCaches() {
+	s.holder.RecalculateCaches()
 }

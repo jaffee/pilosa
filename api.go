@@ -499,27 +499,68 @@ func (api *API) RecalculateCaches(ctx context.Context) error {
 
 // PostClusterMessage is for internal use. It decodes a protobuf message out of
 // the body and forwards it to the BroadcastHandler.
-func (api *API) ClusterMessage(ctx context.Context, reqBody io.Reader) error {
+func (api *API) ClusterMessage(ctx context.Context, reqBody io.Reader, encoding Translator) error {
 	if err := api.validate(apiClusterMessage); err != nil {
 		return errors.Wrap(err, "validating api method")
 	}
 
 	// Read entire body.
-	body, err := ioutil.ReadAll(reqBody)
+	msg, err := ioutil.ReadAll(reqBody)
 	if err != nil {
 		return errors.Wrap(err, "reading body")
 	}
-
-	// Marshal into request object.
-	pb, err := UnmarshalMessage(body)
-	if err != nil {
-		return errors.Wrap(err, "unmarshaling message")
+	typ, buf := msg[0], msg[1:]
+	switch typ {
+	case messageTypeCreateShard:
+		err, index, shard := encoding.DecodeCreateShard(buf)
+		return api.server.messageTypeCreateShard(index, shard)
+	case messageTypeCreateIndex:
+		err, index := encoding.DecodeCreateIndex(buf)
+		return api.server.messageTypeCreateIndex(index)
+	case messageTypeDeleteIndex:
+		err, index := encoding.DecodeDeleteIndex(buf)
+		return api.server.messageTypeDeleteIndex(index)
+	case messageTypeCreateField:
+		err, index, field, opt := encoding.DecodeCreateField(buf)
+		return api.server.messageTypeCreateFieldMessage(index, field, opt)
+	case messageTypeDeleteField:
+		err, index, field := encoding.DecodeDeleteField(buf)
+		return api.server.messageTypeDeleteFieldMessage(index, field)
+	case messageTypeCreateView:
+		err, index, field, view := encoding.DecodeCreateView(buf)
+		return api.server.messageTypeCreateViewMessage(index, field, view)
+	case messageTypeDeleteView:
+		err, index, field, view := encoding.DecodeDeleteView(buf)
+		return api.server.messageTypeDeleteViewMessage(index, field, view)
+	case messageTypeClusterStatus:
+		err, clusterID, state, nodes := encoding.DecodeClusterStatus(buf)
+		return api.cluster.mergeClusterStatus(clusterID, state, nodes)
+	case messageTypeResizeInstruction:
+		err, clusterID, state, nodes, jobID, node, schema, sources, coordinator := encoding.DecodeResizeInstruction(buf)
+		return api.cluster.followResizeInstruction(clusterID, state, nodes, jobID, node, schema, sources, coordinator)
+	case messageTypeResizeInstructionComplete:
+		err, jobID, node := encoding.DecodeResizeInstructionComplete(buf)
+		return api.cluster.markResizeInstructionComplete(jobID, err, node)
+	case messageTypeSetCoordinator:
+		err, node := encoding.DecodeSetCoordinator(buf)
+		return api.cluster.setCoordinator(node)
+	case messageTypeUpdateCoordinator:
+		err, node := encoding.DecodeUpdateCoordinator(buf)
+		api.cluster.updateCoordinator(node)
+		return nil
+	case messageTypeNodeState:
+		err, nodeID, state := encoding.DecodeNodeState(buf)
+		return api.cluster.receiveNodeState(nodeID, state)
+	case messageTypeRecalculateCaches:
+		api.holder.RecalculateCaches()
+		return nil
+	case messageTypeNodeEvent:
+		err, node, event := encoding.DecodeEvent(buf)
+		return api.cluster.ReceiveEvent(&nodeEvent{Node: node, Event: NodeEventType(event)})
+	case messageTypeNodeStatus:
+		//TODO
 	}
 
-	// Forward the error message.
-	if err := api.server.receiveMessage(pb); err != nil {
-		return errors.Wrap(err, "receiving message")
-	}
 	return nil
 }
 

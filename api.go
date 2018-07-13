@@ -609,9 +609,23 @@ func (api *API) Import(ctx context.Context, req *ImportRequest) error {
 		return errors.Wrap(err, "validating api method")
 	}
 
-	_, field, err := api.indexField(req.Index, req.Field, req.Shard)
+	index, field, err := api.indexField(req.Index, req.Field, req.Shard)
 	if err != nil {
 		return errors.Wrap(err, "getting field")
+	}
+
+	// Translate row keys.
+	if field.keys() {
+		if req.RowIDs, err = api.server.translateFile.TranslateRowsToUint64(index.Name(), field.Name(), req.RowKeys); err != nil {
+			return errors.Wrap(err, "translating rows")
+		}
+	}
+
+	// Translate column keys.
+	if index.Keys() {
+		if req.ColumnIDs, err = api.server.translateFile.TranslateColumnsToUint64(index.Name(), req.ColumnKeys); err != nil {
+			return errors.Wrap(err, "translating columns")
+		}
 	}
 
 	// Convert timestamps to time.Time.

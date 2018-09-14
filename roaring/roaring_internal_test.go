@@ -3261,3 +3261,45 @@ func TestUnmarshalOfficialRoaring(t *testing.T) {
 	}
 
 }
+
+func BenchmarkPopcountAndSlice(b *testing.B) {
+	x := bitmapEvenBitsSet()
+	y := bitmapFull()
+	b.Run("Prod", func(b *testing.B) {
+		a := uint64(0)
+		for i := 0; i < b.N; i++ {
+			a += popcountAndSlice(x, y)
+		}
+	})
+	b.Run("NoUnder", func(b *testing.B) {
+		a := uint64(0)
+		for i := 0; i < b.N; i++ {
+			a += popcountAndSliceNoUnderscore(x, y)
+		}
+	})
+	b.Run("NoBCE", func(b *testing.B) {
+		a := uint64(0)
+		for i := 0; i < b.N; i++ {
+			a += popcountAndSliceNoBCE(x, y)
+		}
+	})
+}
+
+func popcountAndSliceNoUnderscore(s, m []uint64) (cnt uint64) {
+	var (
+		a = s[:bitmapN]
+		b = m[:bitmapN]
+	)
+
+	for i := 0; i < bitmapN; i++ {
+		cnt += popcount(a[i] & b[i])
+	}
+	return cnt
+}
+
+func popcountAndSliceNoBCE(s, m []uint64) (cnt uint64) {
+	for i := 0; i < bitmapN; i++ {
+		cnt += popcount(s[i] & m[i])
+	}
+	return cnt
+}

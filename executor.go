@@ -1910,6 +1910,7 @@ func (e *executor) mapReduce(ctx context.Context, index string, shards []uint64,
 }
 
 func (e *executor) mapper(ctx context.Context, ch chan mapResponse, nodes []*Node, index string, shards []uint64, c *pql.Call, opt *execOptions, mapFn mapFunc, reduceFn reduceFunc) error {
+	fmt.Println("len(shards)=%v", len(shards))
 	// Group shards together by nodes.
 	m, err := e.shardsByNode(nodes, index, shards)
 	if err != nil {
@@ -1917,7 +1918,7 @@ func (e *executor) mapper(ctx context.Context, ch chan mapResponse, nodes []*Nod
 	}
 
 	for k, v := range m {
-		fmt.Printf("Node: %v, %v; ", k, len(v))
+		fmt.Printf("%v, %v; ", k, len(v))
 	}
 	fmt.Println()
 

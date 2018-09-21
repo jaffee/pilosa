@@ -1926,6 +1926,7 @@ func (e *executor) mapper(ctx context.Context, ch chan mapResponse, nodes []*Nod
 				resp.result, resp.err = e.mapperLocal(ctx, nodeShards, mapFn, reduceFn)
 			} else if !opt.Remote {
 				results, err := e.remoteExec(ctx, n, index, &pql.Query{Calls: []*pql.Call{c}}, nodeShards)
+				fmt.Printf("remoteExec'd to %v with len(nodeShards)=%d, shard0=%d, err=%v, index=%v, results=%v\n", n, len(nodeShards), nodeShards[0], err, index, results)
 				if len(results) > 0 {
 					resp.result = results[0]
 				}

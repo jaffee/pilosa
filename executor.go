@@ -1916,6 +1916,11 @@ func (e *executor) mapper(ctx context.Context, ch chan mapResponse, nodes []*Nod
 		return errors.Wrap(err, "shards by node")
 	}
 
+	for k, v := range m {
+		fmt.Printf("Node: %v, %v; ", k, len(v))
+	}
+	fmt.Println()
+
 	// Execute each node in a separate goroutine.
 	for n, nodeShards := range m {
 		go func(n *Node, nodeShards []uint64) {
@@ -1924,6 +1929,7 @@ func (e *executor) mapper(ctx context.Context, ch chan mapResponse, nodes []*Nod
 			// Send local shards to mapper, otherwise remote exec.
 			if n.ID == e.Node.ID {
 				resp.result, resp.err = e.mapperLocal(ctx, nodeShards, mapFn, reduceFn)
+				fmt.Printf("mapperLocal'd to %v with len(nodeShards)=%d, shard0=%d, err=%v, index=%v, results=%v\n", n, len(nodeShards), nodeShards[0], resp.err, index, resp.result)
 			} else if !opt.Remote {
 				results, err := e.remoteExec(ctx, n, index, &pql.Query{Calls: []*pql.Call{c}}, nodeShards)
 				fmt.Printf("remoteExec'd to %v with len(nodeShards)=%d, shard0=%d, err=%v, index=%v, results=%v\n", n, len(nodeShards), nodeShards[0], err, index, results)

@@ -438,6 +438,7 @@ func (e *executor) executeBitmapCall(ctx context.Context, index string, c *pql.C
 
 // executeBitmapCallShard executes a bitmap call for a single shard.
 func (e *executor) executeBitmapCallShard(ctx context.Context, index string, c *pql.Call, shard uint64) (*Row, error) {
+	fmt.Printf("Executing %s, shard: %d, call: %s\n", c.Name, shard, call)
 	switch c.Name {
 	case "Row":
 		return e.executeBitmapShard(ctx, index, c, shard)

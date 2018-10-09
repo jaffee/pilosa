@@ -370,6 +370,7 @@ func (m *Command) Close() error {
 			eg.Go(closer.Close)
 		}
 	}
+
 	err := eg.Wait()
 	return errors.Wrap(err, "closing everything")
 }

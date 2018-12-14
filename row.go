@@ -136,6 +136,22 @@ func (r *Row) Union(other *Row) *Row {
 	return &Row{segments: segments}
 }
 
+func (r *Row) UnionInPlace(other *Row) {
+	itr := newMergeSegmentIterator(r.segments, other.segments)
+	var segments []rowSegment
+	for s0, s1 := itr.next(); s0 != nil || s1 != nil; s0, s1 = itr.next() {
+		if s1 == nil {
+			segments = append(segments, *s0)
+			continue
+		} else if s0 == nil {
+			segments = append(segments, *s1)
+			continue
+		}
+		segments = append(segments, *s0.Union(s1))
+	}
+	r.segments = segments
+}
+
 // Difference returns the diff of r and other.
 func (r *Row) Difference(other *Row) *Row {
 	var segments []rowSegment
@@ -304,6 +320,11 @@ func (s *rowSegment) Union(other *rowSegment) *rowSegment {
 		shard: s.shard,
 		n:     data.Count(),
 	}
+}
+
+func (s *rowSegment) UnionInPlace(other *rowSegment) {
+	s.data.UnionInPlace(&other.data)
+	s.n = s.data.Count()
 }
 
 // Difference returns the diff of s and other.

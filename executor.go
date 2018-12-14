@@ -1444,17 +1444,13 @@ func (e *executor) executeUnionShard(ctx context.Context, index string, c *pql.C
 	defer span.Finish()
 
 	other := NewRow()
-	for i, input := range c.Children {
+	for _, input := range c.Children {
 		row, err := e.executeBitmapCallShard(ctx, index, input, shard)
 		if err != nil {
 			return nil, err
 		}
 
-		if i == 0 {
-			other = row
-		} else {
-			other = other.Union(row)
-		}
+		other.UnionInPlace(row)
 	}
 	other.invalidateCount()
 	return other, nil

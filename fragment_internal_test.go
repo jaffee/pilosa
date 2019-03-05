@@ -2080,10 +2080,10 @@ func getZipfRowsSliceRoaring(numRows uint64, seed int64) []byte {
 		posBuf = append(posBuf, row*ShardWidth+i)
 		if len(posBuf) == bufSize {
 			sort.Slice(posBuf, func(i int, j int) bool { return posBuf[i] < posBuf[j] })
-			b.DirectAddN(posBuf...)
+			b.Add(posBuf...)
 		}
 	}
-	b.DirectAddN(posBuf...)
+	b.Add(posBuf...)
 	buf := bytes.NewBuffer(make([]byte, 0, 100000))
 	_, err := b.WriteTo(buf)
 	if err != nil {

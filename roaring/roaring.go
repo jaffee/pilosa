@@ -1106,6 +1106,68 @@ func (b *Bitmap) unmarshalPilosaRoaring(data []byte) error {
 	return nil
 }
 
+// unmarshalPilosaRoaring treats data as being encoded in Pilosa's 64 bit
+// roaring format and decodes it into b.
+func (b *Bitmap) UnmarshalPilosaRoaringNoOps(data []byte) (error, int) {
+	if len(data) < headerBaseSize {
+		return errors.New("data too small"), 0
+	}
+
+	// Verify the first two bytes are a valid MagicNumber, and second two bytes match current storageVersion.
+	fileMagic := uint32(binary.LittleEndian.Uint16(data[0:2]))
+	fileVersion := uint32(binary.LittleEndian.Uint16(data[2:4]))
+	if fileMagic != MagicNumber {
+		return fmt.Errorf("invalid roaring file, magic number %v is incorrect", fileMagic), 0
+	}
+
+	if fileVersion != storageVersion {
+		return fmt.Errorf("wrong roaring version, file is v%d, server requires v%d", fileVersion, storageVersion), 0
+	}
+
+	// Read key count in bytes sizeof(cookie):(sizeof(cookie)+sizeof(uint32)).
+	keyN := binary.LittleEndian.Uint32(data[4:8])
+
+	headerSize := headerBaseSize
+	b.Containers.Reset()
+	// Descriptive header section: Read container keys and cardinalities.
+	for i, buf := 0, data[headerSize:]; i < int(keyN); i, buf = i+1, buf[12:] {
+		b.Containers.PutContainerValues(
+			binary.LittleEndian.Uint64(buf[0:8]),
+			byte(binary.LittleEndian.Uint16(buf[8:10])),
+			int(binary.LittleEndian.Uint16(buf[10:12]))+1,
+			true)
+	}
+	opsOffset := headerSize + int(keyN)*12
+
+	// Read container offsets and attach data.
+	citer, _ := b.Containers.Iterator(0)
+	for i, buf := 0, data[opsOffset:]; i < int(keyN); i, buf = i+1, buf[4:] {
+		offset := binary.LittleEndian.Uint32(buf[0:4])
+		// Verify the offset is within the bounds of the input data.
+		if int(offset) >= len(data) {
+			return fmt.Errorf("offset out of bounds: off=%d, len=%d", offset, len(data)), 0
+		}
+
+		// Map byte slice directly to the container data.
+		citer.Next()
+		_, c := citer.Value()
+		switch c.typ {
+		case containerRun:
+			runCount := binary.LittleEndian.Uint16(data[offset : offset+runCountHeaderSize])
+			c.setRuns((*[0xFFFFFFF]interval16)(unsafe.Pointer(&data[offset+runCountHeaderSize]))[:runCount:runCount])
+			opsOffset = int(offset) + runCountHeaderSize + len(c.runs())*interval16Size
+		case containerArray:
+			c.setArray((*[0xFFFFFFF]uint16)(unsafe.Pointer(&data[offset]))[:c.n:c.n])
+			opsOffset = int(offset) + len(c.array())*2 // sizeof(uint32)
+		case containerBitmap:
+			c.setBitmap((*[0xFFFFFFF]uint64)(unsafe.Pointer(&data[offset]))[:bitmapN:bitmapN])
+			opsOffset = int(offset) + len(c.bitmap())*8 // sizeof(uint64)
+		}
+	}
+
+	return nil, opsOffset
+}
+
 // writeOp writes op to the OpWriter, if available.
 func (b *Bitmap) writeOp(op *op) error {
 	if b.OpWriter == nil {

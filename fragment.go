@@ -86,6 +86,8 @@ const (
 
 // fragment represents the intersection of a field and shard in an index.
 type fragment struct {
+	importN int
+
 	mu sync.RWMutex
 
 	// Composite identifiers
@@ -1798,6 +1800,7 @@ func (f *fragment) importValue(columnIDs, values []uint64, bitDepth uint, clear 
 func (f *fragment) importRoaring(data []byte, clear bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.importN++
 	bm := roaring.NewBitmap()
 	err := bm.UnmarshalBinary(data)
 	if err != nil {
@@ -1838,6 +1841,12 @@ func (f *fragment) importRoaring(data []byte, clear bool) error {
 		return f.importPositions(toSet, toClear, rowSet)
 	}
 
+	name := f.writeOut(bm, f.storage)
+	incSize := bm.Size()
+	incContN := bm.Containers.Size()
+	exisSize := f.storage.Size()
+	exisContN := f.storage.Containers.Size()
+	start := time.Now()
 	if clear {
 		bm = f.storage.Difference(bm)
 	} else if f.storage.Containers.Size() >= bm.Containers.Size() {
@@ -1846,6 +1855,8 @@ func (f *fragment) importRoaring(data []byte, clear bool) error {
 	} else {
 		bm.UnionInPlace(f.storage)
 	}
+	dur := time.Since(start)
+	f.Logger.Printf("wrote '%s' UnionDur: %s. incSize/Cont: %d/%d existSize/Cont: %d/%d", name, dur, incSize, incContN, exisSize, exisContN)
 
 	for rowID := range rowSet {
 		n := bm.CountRange(rowID*ShardWidth, (rowID+1)*ShardWidth)
@@ -1855,6 +1866,27 @@ func (f *fragment) importRoaring(data []byte, clear bool) error {
 
 	err = unprotectedWriteToFragment(f, bm)
 	return err
+}
+
+func (f *fragment) writeOut(incoming, existing *roaring.Bitmap) (name string) {
+	name = fmt.Sprintf("i%s_f%s_v%s_s%d_n%d", f.index, f.field, f.view, f.shard, f.importN)
+	file, err := os.Create(name)
+	if err != nil {
+		f.Logger.Printf("ERROR: debug writing frag: %v", err)
+		return
+	}
+	defer file.Close()
+	_, err = incoming.WriteTo(file)
+	if err != nil {
+		f.Logger.Printf("ERROR: debug writing incoming: %v", err)
+		return
+	}
+	_, err = existing.WriteTo(file)
+	if err != nil {
+		f.Logger.Printf("ERROR: debug writing existing: %v", err)
+		return
+	}
+	return name
 }
 
 // incrementOpN increase the operation count by one.

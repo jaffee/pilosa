@@ -1869,7 +1869,7 @@ func (f *fragment) importRoaring(data []byte, clear bool) error {
 }
 
 func (f *fragment) writeOut(incoming, existing *roaring.Bitmap) (name string) {
-	name = fmt.Sprintf("i%s_f%s_v%s_s%d_n%d", f.index, f.field, f.view, f.shard, f.importN)
+	name = fmt.Sprintf("/tmp/i%s_f%s_v%s_s%d_n%d", f.index, f.field, f.view, f.shard, f.importN)
 	file, err := os.Create(name)
 	if err != nil {
 		f.Logger.Printf("ERROR: debug writing frag: %v", err)

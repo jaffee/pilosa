@@ -2853,19 +2853,20 @@ func (e *executor) translateResult(index string, idx *Index, call *pql.Call, res
 
 // validateQueryContext returns a query-appropriate error if the context is done.
 func validateQueryContext(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		switch err := ctx.Err(); err {
-		case context.Canceled:
-			return ErrQueryCancelled
-		case context.DeadlineExceeded:
-			return ErrQueryTimeout
-		default:
-			return err
-		}
-	default:
-		return nil
-	}
+	return nil
+	// select {
+	// case <-ctx.Done():
+	// 	switch err := ctx.Err(); err {
+	// 	case context.Canceled:
+	// 		return ErrQueryCancelled
+	// 	case context.DeadlineExceeded:
+	// 		return ErrQueryTimeout
+	// 	default:
+	// 		return err
+	// 	}
+	// default:
+	// 	return nil
+	// }
 }
 
 // errShardUnavailable is a marker error if no nodes are available.

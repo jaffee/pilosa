@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"runtime"
 	"sort"
 	"time"
 
@@ -616,9 +615,6 @@ func (e *executor) executeBitmapCall(ctx context.Context, index string, c *pql.C
 func (e *executor) executeBitmapCallShard(ctx context.Context, index string, c *pql.Call, shard uint64) (*Row, error) {
 	if err := validateQueryContext(ctx); err != nil {
 		return nil, err
-	}
-	if time.Now().UnixNano()%13 == 0 {
-		runtime.Gosched()
 	}
 
 	span, ctx := tracing.StartSpanFromContext(ctx, "Executor.executeBitmapCallShard")

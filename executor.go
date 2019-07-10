@@ -617,6 +617,9 @@ func (e *executor) executeBitmapCallShard(ctx context.Context, index string, c *
 	if err := validateQueryContext(ctx); err != nil {
 		return nil, err
 	}
+	if time.Now().UnixNano()%13 == 0 {
+		runtime.Gosched()
+	}
 
 	span, ctx := tracing.StartSpanFromContext(ctx, "Executor.executeBitmapCallShard")
 	defer span.Finish()
@@ -2522,7 +2525,6 @@ func (e *executor) mapperLocal(ctx context.Context, shards []uint64, mapFn mapFu
 
 	for _, shard := range shards {
 		go func(shard uint64) {
-			runtime.Gosched()
 			result, err := mapFn(shard)
 
 			// Return response to the channel.

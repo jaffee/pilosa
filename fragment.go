@@ -613,13 +613,13 @@ func (f *fragment) row(rowID uint64) *Row {
 // unprotectedRow returns a row from the row cache if available or from storage
 // (updating the cache).
 func (f *fragment) unprotectedRow(rowID uint64) *Row {
-	r, ok := f.rowCache.Fetch(rowID)
-	if ok && r != nil {
-		return r
-	}
+	// r, ok := f.rowCache.Fetch(rowID)
+	// if ok && r != nil {
+	// 	return r
+	// }
 
 	row := f.rowFromStorage(rowID)
-	f.rowCache.Add(rowID, row)
+	//f.rowCache.Add(rowID, row)
 	return row
 }
 

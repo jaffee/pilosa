@@ -599,15 +599,8 @@ func (f *fragment) closeStorage(includeMap bool) error {
 // row returns a row by ID.
 func (f *fragment) row(rowID uint64) *Row {
 	f.mu.RLock()
-	r, ok := f.rowCache.Fetch(rowID)
-	if ok && r != nil {
-		f.mu.RUnlock()
-		return r
-	}
-	f.mu.RUnlock()
-	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.unprotectedRow(rowID)
+	return f.rowFromStorage(rowID)
 }
 
 // unprotectedRow returns a row from the row cache if available or from storage

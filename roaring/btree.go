@@ -60,9 +60,7 @@ func (p *btTpool) get() *tree {
 type btEpool struct{ sync.Pool }
 
 func (p *btEpool) get(err error, hit bool, i int, k uint64, q *d, t *tree, ver int64) *enumerator {
-	x := p.Get().(*enumerator)
-	x.err, x.hit, x.i, x.k, x.q, x.t, x.ver = err, hit, i, k, q, t, ver
-	return x
+	return &enumerator{err: err, hit: hit, i: i, k: k, q: q, t: t, ver: ver}
 }
 
 type (

@@ -599,7 +599,7 @@ func (f *fragment) closeStorage(includeMap bool) error {
 // row returns a row by ID.
 func (f *fragment) row(rowID uint64) *Row {
 	f.mu.RLock()
-	defer f.mu.Unlock()
+	defer f.mu.RUnlock()
 	return f.rowFromStorage(rowID)
 }
 
